@@ -135,56 +135,38 @@ initialStates :: [KeyValue]
 initialStates = [ KeyValue Map.empty
                 , KeyValue (Map.singleton 1 "foo")
                 ]
--- ------------------------------------------------------------- VVVVV ------------------------------------
 
-genUpdateEvents :: Gen [Update KeyValue ()]
-genUpdateEvents = sequence updates
-  where
-    --updates :: [Gen (Update KeyValue ())]
-    updates = [ InsertKey        <$> genKey <*> genValue
-              , ReverseKeyOrFail <$> genKey <*> genBomb
-              , pure BreakState
-              ]
+-- | A gererator for Insert Events for our State.
+genInsertEvents :: Gen [InsertKey]
+genInsertEvents = Gen.list (Range.linear 0 10) (InsertKey <$> genKey <*> genValue)
 
-applyUpdatesOneByOne :: forall s e .
-              ( IsAcidic s
-              , EventState e ~ s
-              , UpdateEvent e
-              , Eq (EventResult e)
-              , Show (EventResult e)
-              , Typeable (EventResult e)
-              )
-              => [e] -> AcidState (EventState e) -> IO ()
-applyUpdatesOneByOne [] _ = return ()
-applyUpdatesOneByOne (e : es) acidState = do
-  void $ update acidState e
-  applyUpdatesOneByOne es acidState
-
+-- | Property to check for a given list of update events whether applying
+-- `groupupdate` function and applying the updates one by one results in same state
+-- or not.
 validGroupUpdateProperty :: forall s e q.
               ( IsAcidic s
-              , Typeable s
               , QueryEvent q
               , UpdateEvent e
               , EventState q ~ s
               , EventState e ~ s
-              , EventResult e ~ s
               , EventResult q ~ s
               , Eq s
               , Show s
+              , Typeable s
               , Show e
               )
               => Gen s -> Gen [e] -> q -> Property
-validGroupUpdateProperty gen updateEvents_gen q = property $ do
+validGroupUpdateProperty gen genUpdateEvents q = property $ do
   initialState <- forAll gen
-  updateEvents <- forAll updateEvents_gen
+  updateEvents <- forAll genUpdateEvents
   r1 <- liftIO $ do 
     resetState i
     st <- openState i initialState
-    applyUpdatesOneByOne updateEvents st
+    mapM_ (update st) updateEvents
     r <- query st q
     resetState i
     closeState i st
-    pure r
+    return r
 
   r2 <- liftIO $ do
     st <- openState i initialState
@@ -192,7 +174,7 @@ validGroupUpdateProperty gen updateEvents_gen q = property $ do
     r <- query st q
     resetState i
     closeState i st
-    pure r
+    return r
   
   r1 === r2
 
@@ -200,10 +182,8 @@ validGroupUpdateProperty gen updateEvents_gen q = property $ do
     fp = "./TestGroupUpdates"
     i  = acidStateInterface fp
 
-prop_validGroupUpdates :: Property
-prop_validGroupUpdates = validGroupUpdateProperty (pure (head initialStates)) genUpdateEvents AskState
-
--- ---------------------------------------------------------------^^^^------------------------------------
+prop_valid_Group_Updates :: Property
+prop_valid_Group_Updates = validGroupUpdateProperty (pure (head initialStates)) genInsertEvents AskState
 
 prop_sequential :: Property
 prop_sequential = acidStateSequentialProperty (acidStateInterface fp) (pure (head initialStates)) (Range.linear 1 10) keyValueCommands
