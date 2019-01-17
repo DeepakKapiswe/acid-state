@@ -136,7 +136,7 @@ initialStates = [ KeyValue Map.empty
                 , KeyValue (Map.singleton 1 "foo")
                 ]
 -- ------------------------------------------------------------- VVVVV ------------------------------------
-{-
+
 genUpdateEvents :: Gen [Update KeyValue ()]
 genUpdateEvents = sequence updates
   where
@@ -145,7 +145,6 @@ genUpdateEvents = sequence updates
               , ReverseKeyOrFail <$> genKey <*> genBomb
               , pure BreakState
               ]
--}
 
 applyUpdatesOneByOne :: forall s e .
               ( IsAcidic s
@@ -202,7 +201,7 @@ validGroupUpdateProperty gen updateEvents_gen q = property $ do
     i  = acidStateInterface fp
 
 prop_validGroupUpdates :: Property
-prop_validGroupUpdates = validGroupUpdateProperty (pure (head initialStates)) (pure [ReverseKey 10]) AskState
+prop_validGroupUpdates = validGroupUpdateProperty (pure (head initialStates)) genUpdateEvents AskState
 
 -- ---------------------------------------------------------------^^^^------------------------------------
 
